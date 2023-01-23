@@ -18,7 +18,7 @@ Clone the repo and then execute
 cargo run
 ```
 
-You should now have the server running locally at [localhost:300](http://localhost:300).
+You should now have the server running locally at [localhost:3000](http://localhost:3000).
 
 ## Endpoints
 
@@ -26,3 +26,15 @@ The endpoints developed for now are:
 
 - `POST /note`: create a new note (based on the string passed as body payload)
 - `GET /note/:id`: gets a note by ID
+
+
+## Contributing
+
+Everyone is very welcome to contribute to this project.
+You can contribute just by submitting bugs or suggesting improvements by
+[opening an issue on GitHub](https://github.com/lmammino/trying-axum/issues).
+
+
+## License
+
+Licensed under [MIT License](LICENSE). © Luciano Mammino.
