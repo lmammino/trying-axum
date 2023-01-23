@@ -23,9 +23,9 @@ struct Message {
 }
 
 #[derive(Serialize)]
-struct Note {
-    id: Uuid,
-    content: String,
+enum NoteOrError {
+    Note { id: Uuid, content: String },
+    Error { message: String },
 }
 
 #[tokio::main]
@@ -54,7 +54,7 @@ async fn create_note(body: Bytes) -> impl IntoResponse {
     // TODO: remove the clone, if you can! (maybe references)
     (*guard).insert(id, body_content_str.clone());
 
-    let new_note = Note {
+    let new_note = NoteOrError::Note {
         id,
         content: body_content_str,
     };
@@ -68,19 +68,19 @@ async fn get_note(Path(id): Path<Uuid>) -> impl IntoResponse {
     let note = (*guard).get(&id);
 
     if note.is_none() {
-        let error = Message {
-            message: "Not found".to_string(),
-        };
-        let error: serde_json::Value = serde_json::to_value(error).unwrap();
-        return (StatusCode::NOT_FOUND, Json(error));
+        return (
+            StatusCode::NOT_FOUND,
+            Json(NoteOrError::Error {
+                message: "Not found".to_string(),
+            }),
+        );
     }
 
     let message = note.unwrap();
-    let note = Note {
+    let note = NoteOrError::Note {
         id,
         content: message.clone(),
     };
-    let note: serde_json::Value = serde_json::to_value(note).unwrap();
     (StatusCode::OK, Json(note))
 }
 
