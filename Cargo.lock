@@ -645,7 +645,6 @@ dependencies = [
  "axum",
  "lazy_static",
  "serde",
- "serde_json",
  "tokio",
  "uuid",
 ]
