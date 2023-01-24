@@ -23,6 +23,7 @@ struct Message {
 }
 
 #[derive(Serialize)]
+#[serde(untagged)]
 enum NoteOrError {
     Note { id: Uuid, content: String },
     Error { message: String },
