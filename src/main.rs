@@ -7,7 +7,7 @@ use axum::{
     Json, Router,
 };
 use serde::Serialize;
-use sqlx::{Pool, Row, Sqlite, SqlitePool};
+use sqlx::{Pool, Sqlite, SqlitePool};
 use std::{env, net::SocketAddr, sync::Arc};
 use uuid::Uuid;
 
@@ -75,22 +75,21 @@ async fn create_note(State(pool): State<Conn>, body: Bytes) -> impl IntoResponse
 }
 
 async fn get_note(State(pool): State<Conn>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let row = sqlx::query("SELECT content FROM notes WHERE id = ?")
-        .bind(id.to_string().as_str())
-        .fetch_one(&(*pool))
+    let _id = id.to_string();
+    let row = sqlx::query!("SELECT content FROM notes WHERE id = ?", _id)
+        .fetch_optional(&(*pool))
         .await
         .unwrap();
 
-    let content: &str = row.try_get("content").unwrap();
+    if row.is_none() {
+        let error = Message {
+            message: "Not found".to_string(),
+        };
+        let error: serde_json::Value = serde_json::to_value(error).unwrap();
+        return (StatusCode::NOT_FOUND, Json(error));
+    }
 
-    // TODO: figure out how to check if the record is missing
-    // if note.is_none() {
-    //     let error = Message {
-    //         message: "Not found".to_string(),
-    //     };
-    //     let error: serde_json::Value = serde_json::to_value(error).unwrap();
-    //     return (StatusCode::NOT_FOUND, Json(error));
-    // }
+    let content: &str = &row.unwrap().content;
 
     let note = Note {
         id,
