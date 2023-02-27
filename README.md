@@ -10,11 +10,17 @@ The recordings are available on [Youtube](https://www.youtube.com/playlist?list=
 
 More to come in the next streams, make sure to follow us if you are interested in learning along.
 
+## Requirements
+
+Rust and `sqlx` (`cargo install sql`)
+
 ## How to run
 
 Clone the repo and then execute
 
 ```bash
+export DATABASE_URL="sqlite:data.db"
+sqlx db create
 cargo run
 ```
 

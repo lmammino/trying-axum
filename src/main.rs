@@ -7,8 +7,8 @@ use axum::{
     Json, Router,
 };
 use serde::Serialize;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::sync::Mutex;
+use sqlx::{Pool, Row, Sqlite, SqlitePool};
+use std::{env, net::SocketAddr, sync::Arc};
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -22,18 +22,20 @@ struct Note {
     content: String,
 }
 
-type AppState = Arc<Mutex<HashMap<Uuid, String>>>;
+type Conn = Arc<Pool<Sqlite>>;
 
 #[tokio::main]
 async fn main() {
-    let shared_state: AppState = Arc::new(Mutex::new(HashMap::new()));
+    let pool = SqlitePool::connect(&env::var("DATABASE_URL").unwrap())
+        .await
+        .unwrap();
+
+    let state_pool = Arc::new(pool);
 
     let app = Router::new()
-        .route("/", get(root))
-        .route("/hello", get(hello))
         .route("/note", post(create_note))
         .route("/note/:id", get(get_note))
-        .with_state(shared_state);
+        .with_state(state_pool);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     axum::Server::bind(&addr)
@@ -43,15 +45,26 @@ async fn main() {
 }
 
 // TODO: generalise state rather than lazy static
-async fn create_note(State(state): State<AppState>, body: Bytes) -> impl IntoResponse {
+async fn create_note(State(pool): State<Conn>, body: Bytes) -> impl IntoResponse {
     let id = Uuid::new_v4();
     let body_content: Vec<u8> = body.into_iter().collect();
     // TODO: handle error
     let body_content_str = String::from_utf8(body_content).unwrap();
 
-    let mut guard = state.lock().await;
-    // TODO: remove the clone, if you can! (maybe references)
-    (*guard).insert(id, body_content_str.clone());
+    // TODO: handle error properly
+    //let mut conn = pool.acquire().await.unwrap();
+
+    sqlx::query(
+        r#"
+    INSERT INTO notes ( id, content )
+    VALUES ( ?1, ?2 )
+            "#,
+    )
+    .bind(id.to_string().as_str())
+    .bind(body_content_str.clone())
+    .execute(&(*pool))
+    .await
+    .unwrap();
 
     let new_note = Note {
         id,
@@ -61,37 +74,28 @@ async fn create_note(State(state): State<AppState>, body: Bytes) -> impl IntoRes
     (StatusCode::CREATED, Json(new_note))
 }
 
-async fn get_note(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let guard = state.lock().await;
+async fn get_note(State(pool): State<Conn>, Path(id): Path<Uuid>) -> impl IntoResponse {
+    let row = sqlx::query("SELECT content FROM notes WHERE id = ?")
+        .bind(id.to_string().as_str())
+        .fetch_one(&(*pool))
+        .await
+        .unwrap();
 
-    let note = (*guard).get(&id);
+    let content: &str = row.try_get("content").unwrap();
 
-    if note.is_none() {
-        let error = Message {
-            message: "Not found".to_string(),
-        };
-        let error: serde_json::Value = serde_json::to_value(error).unwrap();
-        return (StatusCode::NOT_FOUND, Json(error));
-    }
+    // TODO: figure out how to check if the record is missing
+    // if note.is_none() {
+    //     let error = Message {
+    //         message: "Not found".to_string(),
+    //     };
+    //     let error: serde_json::Value = serde_json::to_value(error).unwrap();
+    //     return (StatusCode::NOT_FOUND, Json(error));
+    // }
 
-    let message = note.unwrap();
     let note = Note {
         id,
-        content: message.clone(),
+        content: content.to_string(),
     };
     let note: serde_json::Value = serde_json::to_value(note).unwrap();
     (StatusCode::OK, Json(note))
-}
-
-// basic handler that responds with a static string
-async fn root() -> &'static str {
-    "Hello, World!"
-}
-
-async fn hello() -> impl IntoResponse {
-    let message = Message {
-        message: "Hello, Json!".to_string(),
-    };
-
-    (StatusCode::OK, Json(message))
 }
